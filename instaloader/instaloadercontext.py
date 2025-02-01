@@ -22,6 +22,9 @@ from .exceptions import *
 def copy_session(session: requests.Session, request_timeout: Optional[float] = None) -> requests.Session:
     """Duplicates a requests.Session."""
     new = requests.Session()
+    new.verify = session.verify
+    new.proxies = session.proxies
+    new.cert = session.cert
     new.cookies = requests.utils.cookiejar_from_dict(requests.utils.dict_from_cookiejar(session.cookies))
     new.headers = session.headers.copy()  # type: ignore
     # Override default timeout behavior.
@@ -82,10 +85,16 @@ class InstaloaderContext:
                  max_connection_attempts: int = 3, request_timeout: float = 300.0,
                  rate_controller: Optional[Callable[["InstaloaderContext"], "RateController"]] = None,
                  fatal_status_codes: Optional[List[int]] = None,
-                 iphone_support: bool = True):
+                 iphone_support: bool = True,
+                 proxy: Optional[Dict[str, str]] = None,
+                 cert: Optional[str] = None,
+                 verify_ssl: Union[bool, str] = True):
 
         self.user_agent = user_agent if user_agent is not None else default_user_agent()
         self.request_timeout = request_timeout
+        self.verify_ssl = verify_ssl
+        self.cert = cert
+        self.proxies = proxy
         self._session = self.get_anonymous_session()
         self.username = None
         self.user_id = None
@@ -202,7 +211,10 @@ class InstaloaderContext:
     def get_anonymous_session(self) -> requests.Session:
         """Returns our default anonymous requests.Session object."""
         session = requests.Session()
-        session.cookies.update({'sessionid': '', 'mid': '', 'ig_pr': '1',
+        session.verify = self.verify_ssl
+        session.proxies = self.proxies
+        session.cert = self.cert
+        session.cookies.update({'mid': '', 'ig_pr': '1',
                                 'ig_vw': '1920', 'csrftoken': '',
                                 's_network': '', 'ds_user_id': ''})
         session.headers.update(self._default_http_header(empty_session_only=True))
@@ -222,6 +234,9 @@ class InstaloaderContext:
     def load_session(self, username, sessiondata):
         """Not meant to be used directly, use :meth:`Instaloader.load_session`."""
         session = requests.Session()
+        session.verify = self.verify_ssl
+        session.proxies = self.proxies
+        session.cert = self.cert
         session.cookies = requests.utils.cookiejar_from_dict(sessiondata)
         session.headers.update(self._default_http_header())
         session.headers.update({'X-CSRFToken': session.cookies.get_dict()['csrftoken']})
@@ -266,7 +281,10 @@ class InstaloaderContext:
         # pylint:disable=protected-access
         http.client._MAXHEADERS = 200
         session = requests.Session()
-        session.cookies.update({'sessionid': '', 'mid': '', 'ig_pr': '1',
+        session.proxies = self.proxies
+        session.verify = self.verify_ssl
+        session.cert = self.cert
+        session.cookies.update({'mid': '', 'ig_pr': '1',
                                 'ig_vw': '1920', 'ig_cb': '1', 'csrftoken': '',
                                 's_network': '', 'ds_user_id': ''})
         session.headers.update(self._default_http_header())
